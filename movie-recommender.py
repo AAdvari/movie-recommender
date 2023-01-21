@@ -152,6 +152,8 @@ class ContentBasedRecommendation():
         print(self.predict_by_movie('Rocky III'))
         print('***************************************************************************')
         print(self.predict(1))
+
+
 ############################################################ Collaborative ############################################################
 class CollaborativeRecommendation():
     def __init__(self):
@@ -222,6 +224,8 @@ class CollaborativeRecommendation():
 
     def local_collaborative_test(self):
         print(self.recommendation_for_user(self.movie_df, self.rate_df, self.similarities_sparse, 1))
+
+
 ############################################################ Ensemble ############################################################
 class EnsembleRecommendation():
     def __init__(self):
@@ -265,6 +269,8 @@ class EnsembleRecommendation():
         print(self.predict(1, intersection_base=True))
         print('***************************************************************************')
         print(self.predict(1, intersection_base=False))
+
+
 ############################################################ Testing Models ############################################################
 # warnings.filterwarnings("ignore")
 # ensemble = EnsembleRecommendation()
@@ -275,18 +281,18 @@ class EnsembleRecommendation():
 # ensemble.local_test()
 ############################################################ MLOps Model ############################################################
 class RecommenderSystemModel(mlflow.pyfunc.PythonModel):
-    def set_initial_model(self):
-        if self.collab == None or self.content == None or self.ensemble == None:
-            self.ensemble = EnsembleRecommendation()
-            self.collab = self.ensemble.collab
-            self.content = self.ensemble.content
+
+    def load_context(self, context):
+        self.ensemble = EnsembleRecommendation()
+        self.collab = self.ensemble.collab
+        self.content = self.ensemble.content
 
     def predict(self, context, model_input):
         return self.my_custom_function(model_input)
 
     def my_custom_function(self, model_input):
-        user_id, number = model_input
-        self.set_initial_model()
+        user_id = model_input[0]
+        type = model_input[1]
         if type == 1:
             return self.content.predict(user_id)
         if type == 2:
@@ -296,3 +302,10 @@ class RecommenderSystemModel(mlflow.pyfunc.PythonModel):
         if type == 4:
             return self.ensemble.predict(user_id, intersection_base=True)
         return 0
+
+# mlflow.pyfunc.save_model(path=model_path, python_model=RecommenderSystemModel())
+
+# model_path = "recommender-model"
+# loaded_model = mlflow.pyfunc.load_model(model_path)
+# print(loaded_model.predict([1, 1]))
+
