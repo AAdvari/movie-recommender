@@ -15,7 +15,7 @@ import torch
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-############################################################ Content Base ############################################################
+#################### Content Base ####################
 class ContentBasedRecommendation():
     def __init__(self):
         self.credits_ds, self.links_ds, self.ratings_ds, self.keywords_ds, self.movies_metadata_ds = self.load_datasets()
@@ -154,7 +154,7 @@ class ContentBasedRecommendation():
         print(self.predict(1))
 
 
-############################################################ Collaborative ############################################################
+#################### Collaborative ####################
 class CollaborativeRecommendation():
     def __init__(self):
         self.movie_df, self.rate_df = self.load_dataframes()
@@ -226,7 +226,7 @@ class CollaborativeRecommendation():
         print(self.recommendation_for_user(self.movie_df, self.rate_df, self.similarities_sparse, 1))
 
 
-############################################################ Ensemble ############################################################
+#################### Ensemble ####################
 class EnsembleRecommendation():
     def __init__(self):
         self.collab = CollaborativeRecommendation()
@@ -271,7 +271,7 @@ class EnsembleRecommendation():
         print(self.predict(1, intersection_base=False))
 
 
-############################################################ Testing Models ############################################################
+#################### Testing Models ####################
 # warnings.filterwarnings("ignore")
 # ensemble = EnsembleRecommendation()
 # ensemble.content.local_content_base_test()
@@ -279,7 +279,7 @@ class EnsembleRecommendation():
 # ensemble.collab.local_collaborative_test()
 # print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
 # ensemble.local_test()
-############################################################ MLOps Model ############################################################
+#################### MLOps Model ####################
 class RecommenderSystemModel(mlflow.pyfunc.PythonModel):
 
     def load_context(self, context):
@@ -287,8 +287,37 @@ class RecommenderSystemModel(mlflow.pyfunc.PythonModel):
         self.collab = self.ensemble.collab
         self.content = self.ensemble.content
 
+    def add_data(self, df):
+        pre_df = pd.read_csv('./dataset/IMDB/ratings_small.csv')
+        new_df = pd.concat([pre_df, df])
+        new_df.to_csv('./dataset/IMDB/ratings_small.csv', index=False)
+
+        movie_df = pd.read_csv('./dataset/IMDB/movies_metadata.csv')
+        movies = list(df['movieId'].unique())
+        movies = list(map(lambda x: str(x), movies))
+        def vote_update(row):
+            if row['id'] not in movies:
+                return row
+            vote = df[df['movieId'] == row['id']]['rating'].sum()
+            count = df[df['movieId'] == row['id']].count()
+            pre_count = int(row['vote_count'])
+            pre_avg = float(row['vote_average'])
+            new_avg = ((pre_avg * pre_count) + vote) / (count + pre_count)
+            row['vote_average'] = str(new_avg)
+            row['vote_count'] = str(pre_count + count)
+            return row
+
+        movie_df[['vote_count', 'vote_average']] = movie_df.apply(vote_update, axis=1)[['vote_count', 'vote_average']]
+        movie_df.to_csv('./dataset/IMDB/movies_metadata.csv', index=False)
+        # self.ensemble = EnsembleRecommendation()
+        # self.collab = self.ensemble.collab
+        # self.content = self.ensemble.content
+
     def predict(self, context, model_input):
-        return self.my_custom_function(model_input)
+        if type(model_input) == list:
+            return self.my_custom_function(model_input)
+        else:
+            return self.add_data(model_input)
 
     def my_custom_function(self, model_input):
         user_id = model_input[0]
@@ -304,9 +333,24 @@ class RecommenderSystemModel(mlflow.pyfunc.PythonModel):
         return 0
 
 
+warnings.filterwarnings("ignore")
+x = pd.read_csv('./dataset/IMDB/movies_metadata.csv')
+print(x[x['id'] == '862'].to_string())
+rs = RecommenderSystemModel()
+rs.add_data(pd.DataFrame(
+    {
+        'userId':[1, 1, 1],
+        'movieId':[862, 862, 862],
+        'rating':[1000,1000, 1000]
+    }
+))
+x = pd.read_csv('./dataset/IMDB/movies_metadata.csv')
+print(x[x['id'] == '862'].to_string())
+x = pd.read_csv('./dataset/IMDB/ratings_small.csv')
+print(x[x['movieId'] == 862].to_string())
 
 # sending request command
 ## mlflow models serve -m recommender-model -p 6000
-# curl http://127.0.0.1:5000/invocations -H 'Content-Type: application/json' -d '{
+# curl http://127.0.0.1:6000/invocations -H 'Content-Type: application/json' -d '{
 #   "inputs": [1,1]
 # }'
