@@ -176,7 +176,7 @@ class CollaborativeRecommendation():
 
     def make_similarity_sparse(self, sparse_matrix):
         similarities_sparse = cosine_similarity(sparse_matrix, dense_output=False)
-        mlflow.log_param("users similarity sparse matrix", similarities_sparse)
+        mlflow.log_param("users similarity sparse matrix", str(similarities_sparse)[:400])
         return similarities_sparse
 
     def top_n_index_sparse(self, similarities_sparse, user_id, number=20):
@@ -229,6 +229,8 @@ class CollaborativeRecommendation():
 #################### Ensemble ####################
 class EnsembleRecommendation():
     def __init__(self):
+        mlflow.end_run()
+        mlflow.start_run()
         self.collab = CollaborativeRecommendation()
         self.content = ContentBasedRecommendation()
 
@@ -295,11 +297,12 @@ class RecommenderSystemModel(mlflow.pyfunc.PythonModel):
         movie_df = pd.read_csv('./dataset/IMDB/movies_metadata.csv')
         movies = list(df['movieId'].unique())
         movies = list(map(lambda x: str(x), movies))
+
         def vote_update(row):
             if row['id'] not in movies:
                 return row
-            vote = df[df['movieId'] == row['id']]['rating'].sum()
-            count = df[df['movieId'] == row['id']].count()
+            vote = df[df['movieId'] == int(row['id'])]['rating'].values.sum()
+            count = len(df[df['movieId'] == int(row['id'])])
             pre_count = int(row['vote_count'])
             pre_avg = float(row['vote_average'])
             new_avg = ((pre_avg * pre_count) + vote) / (count + pre_count)
@@ -307,11 +310,12 @@ class RecommenderSystemModel(mlflow.pyfunc.PythonModel):
             row['vote_count'] = str(pre_count + count)
             return row
 
-        movie_df[['vote_count', 'vote_average']] = movie_df.apply(vote_update, axis=1)[['vote_count', 'vote_average']]
+        movie_df[['vote_count', 'vote_average']] = \
+            movie_df.apply(lambda x: vote_update(x), axis=1)[['vote_count', 'vote_average']]
         movie_df.to_csv('./dataset/IMDB/movies_metadata.csv', index=False)
-        # self.ensemble = EnsembleRecommendation()
-        # self.collab = self.ensemble.collab
-        # self.content = self.ensemble.content
+        self.ensemble = EnsembleRecommendation()
+        self.collab = self.ensemble.collab
+        self.content = self.ensemble.content
 
     def predict(self, context, model_input):
         if type(model_input) == list:
@@ -333,24 +337,34 @@ class RecommenderSystemModel(mlflow.pyfunc.PythonModel):
         return 0
 
 
-warnings.filterwarnings("ignore")
-x = pd.read_csv('./dataset/IMDB/movies_metadata.csv')
-print(x[x['id'] == '862'].to_string())
-rs = RecommenderSystemModel()
-rs.add_data(pd.DataFrame(
-    {
-        'userId':[1, 1, 1],
-        'movieId':[862, 862, 862],
-        'rating':[1000,1000, 1000]
-    }
-))
-x = pd.read_csv('./dataset/IMDB/movies_metadata.csv')
-print(x[x['id'] == '862'].to_string())
-x = pd.read_csv('./dataset/IMDB/ratings_small.csv')
-print(x[x['movieId'] == 862].to_string())
+# warnings.filterwarnings("ignore")
+# x = pd.read_csv('./dataset/IMDB/movies_metadata.csv')
+# print(x[x['id'] == '862'].to_string())
+
+EnsembleRecommendation()
+
+# rs = RecommenderSystemModel()
+# rs.add_data(pd.DataFrame(
+#     {
+#         'userId': [1, 1, 1],
+#         'movieId': [862, 862, 862],
+#         'rating': [1000, 1000, 1000]
+#     }
+# ))
+# x = pd.read_csv('./dataset/IMDB/movies_metadata.csv')
+# print(x[x['id'] == '862'].to_string())
+# x = pd.read_csv('./dataset/IMDB/ratings_small.csv')
+# print(x[x['movieId'] == 862].to_string())
 
 # sending request command
 ## mlflow models serve -m recommender-model -p 6000
 # curl http://127.0.0.1:6000/invocations -H 'Content-Type: application/json' -d '{
 #   "inputs": [1,1]
+# }'
+
+# curl http://127.0.0.1:5000/invocations -H 'Content-Type: application/json' -d '{
+# "dataframe_records": [
+#     {"userId": 1,"movieId": 2,"rating": 3},
+#     {"userId": 4,"movieId": 5,"rating": 6}
+# ]
 # }'
