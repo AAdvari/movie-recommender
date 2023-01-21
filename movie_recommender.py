@@ -303,9 +303,10 @@ class RecommenderSystemModel(mlflow.pyfunc.PythonModel):
             return self.ensemble.predict(user_id, intersection_base=True)
         return 0
 
-# mlflow.pyfunc.save_model(path=model_path, python_model=RecommenderSystemModel())
 
-# model_path = "recommender-model"
-# loaded_model = mlflow.pyfunc.load_model(model_path)
-# print(loaded_model.predict([1, 1]))
 
+# sending request command
+## mlflow models serve -m recommender-model -p 6000
+# curl http://127.0.0.1:5000/invocations -H 'Content-Type: application/json' -d '{
+#   "inputs": [1,1]
+# }'
