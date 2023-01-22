@@ -318,10 +318,11 @@ class RecommenderSystemModel(mlflow.pyfunc.PythonModel):
         self.content = self.ensemble.content
 
     def predict(self, context, model_input):
-        if type(model_input) == list:
-            return self.my_custom_function(model_input)
-        else:
+        print(model_input)
+        if isinstance(model_input, pd.DataFrame):
             return self.add_data(model_input)
+        else:
+            return self.my_custom_function(model_input)
 
     def my_custom_function(self, model_input):
         user_id = model_input[0]
